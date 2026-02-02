@@ -431,7 +431,6 @@ export class SecureChannelClient {
     this._ephemeralKeyPair = undefined
 
     await this.unpair()
-    await clearClientKeypair()
 
     chrome.runtime
       .sendMessage({
