@@ -7,7 +7,7 @@ import { LOGO_PADDING, LOGO_SIZE } from './constants/styles'
 import { createIframe } from './utils/createIframe'
 import { findLoginForms } from './utils/findLoginForms'
 import { findSelectOptionValue } from './utils/findSelectOptionValue'
-import { getField } from './utils/getField'
+import { getField, PASSWORD_MATCHERS } from './utils/getField'
 import { isContentScriptEnabled } from './utils/isContentScriptEnabled'
 import { isIdentityField } from './utils/isIdentityField'
 import { isPasswordField } from './utils/isPasswordField'
@@ -20,6 +20,7 @@ import {
   onAutofillEnabledChanged
 } from '../shared/utils/autofillSetting'
 import { logger } from '../shared/utils/logger'
+import { runtime } from '../shared/utils/runtime'
 
 const activeIframes = new Set()
 
@@ -74,7 +75,7 @@ window.addEventListener('message', async (event) => {
   handleIframeEvent(event)
 })
 
-chrome.runtime.onMessage.addListener(async (msg) => {
+runtime.onMessage.addListener(async (msg) => {
   if (!(await isContentScriptEnabled())) {
     return
   }
@@ -236,8 +237,9 @@ function handleAutofillLogin({ username, password }) {
   if (!isAutoFillEnabled) {
     return
   }
+
   const { element: usernameField } = getField(['username', 'email'])
-  const { element: passwordField } = getField(['password'])
+  const { element: passwordField } = getField(PASSWORD_MATCHERS)
 
   if (usernameField) {
     usernameField.value = username
@@ -386,7 +388,7 @@ function onSubmit({ username, password }) {
 
   const data = { url: window.location.href, username, password }
 
-  chrome.runtime.sendMessage({
+  runtime.sendMessage({
     type: IFRAME_TYPES.login,
     data: data
   })
@@ -436,7 +438,7 @@ function detectSubmitClick(event) {
   if (/(next|sign in|login|submit)/.test(label)) {
     setTimeout(() => {
       const { element: userNameField } = getField(['username', 'email'])
-      const { element: passwordField } = getField(['password'])
+      const { element: passwordField } = getField(PASSWORD_MATCHERS)
 
       const username = userNameField?.value
       const password = passwordField?.value
@@ -456,7 +458,7 @@ const observer = new MutationObserver(async () => {
 
 observer.observe(document, { childList: true, subtree: true })
 
-chrome.runtime
+runtime
   .sendMessage({
     type: 'getPendingLogin'
   })
@@ -519,6 +521,14 @@ function hideLogoOnOutsideClick(event) {
     !logoIframeData ||
     element.isSameNode(logoIframeData?.element) ||
     element.isSameNode(logoIframeData?.iframe)
+  ) {
+    return
+  }
+
+  if (
+    logoIframeData.element &&
+    document.activeElement &&
+    logoIframeData.element.isSameNode(document.activeElement)
   ) {
     return
   }
@@ -621,7 +631,7 @@ function getIframeData(type) {
 }
 
 function sendDataToIframe({ iframeType, iframeData }) {
-  const extensionOrigin = chrome.runtime.getURL('').slice(0, -1)
+  const extensionOrigin = runtime.getURL('').slice(0, -1)
 
   iframeData?.iframe?.contentWindow?.postMessage(
     {
@@ -648,7 +658,7 @@ function handleWindowEvent(event) {
   const type = data.type
 
   if (type === CONTENT_MESSAGE_TYPES.CREATE_PASSKEY) {
-    chrome.runtime.sendMessage({
+    runtime.sendMessage({
       type: MESSAGE_TYPES.CREATE_PASSKEY,
       requestId: data.requestId,
       publicKey: data.publicKey,
@@ -657,7 +667,7 @@ function handleWindowEvent(event) {
   }
 
   if (type === CONTENT_MESSAGE_TYPES.GET_PASSKEY) {
-    chrome.runtime.sendMessage({
+    runtime.sendMessage({
       type: MESSAGE_TYPES.GET_PASSKEY,
       requestId: data.requestId,
       publicKey: data.publicKey,
@@ -677,7 +687,7 @@ const handleIframeEvent = (event) => {
     (iframeData) => iframeData.id === iframeId
   )
 
-  const extensionOrigin = chrome.runtime.getURL('').slice(0, -1)
+  const extensionOrigin = runtime.getURL('').slice(0, -1)
 
   if (
     !eventType ||
